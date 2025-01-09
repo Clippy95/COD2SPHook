@@ -29,7 +29,7 @@ static int HookDvarRegisterFloat(int ArgList, DWORD* a2, int a3, int a4, int fla
 
 void registerdvars() {
 
-    cg_fovscale_ptr = HookDvarRegisterFloat((int)fovscale, (DWORD*)0x3F800000, 0x3F800000, 0x40a00000, 0x1001);
+    cg_fovscale_ptr = originalDvarRegisterFloat((int)fovscale, (DWORD*)0x3F800000, 0x3F800000, 0x40a00000, 0x1001);
 
     return originalRegisterDvars();
 }
