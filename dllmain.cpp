@@ -1,12 +1,13 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
 #include "pch.h"
 #include "MinHook.h"
+#include "header.h"
 #pragma comment(lib, "libMinHook.x86.lib")
 #ifdef _DEBUG
 #include <stdio.h> 
 #include <iostream> 
 #endif
-typedef int(__cdecl* DvarRegisterFloatFunc)(int ArgList, DWORD* a2, int a3, int a4, int flag);
+typedef dvar_t* (__cdecl* DvarRegisterFloatFunc)(int ArgList, float var_value, float var_min, float var_max, int flag);
 DvarRegisterFloatFunc originalDvarRegisterFloat = nullptr;
 
 typedef void(__stdcall* RegisterDvarsFunc)();
@@ -16,27 +17,25 @@ RegisterDvarsFunc originalRegisterDvars = nullptr;
 typedef void(__thiscall* fov_func)(void *athis);
 fov_func fov_loop_original = nullptr;
 
-const char* fovscale = "cg_fovscale";
-
 static float cg_fovscale = 0.75f;
 
-uintptr_t cg_fovscale_ptr;
-static int HookDvarRegisterFloat(int ArgList, DWORD* a2, int a3, int a4, int flag) {
+dvar_t *cg_fovscale_ptr;
+static dvar_t* HookDvarRegisterFloat(int ArgList, float var_value, float var_min, float var_max, int flag) {
 
     // inb4 causes issues.
-  return originalDvarRegisterFloat(ArgList, a2, a3, a4, 0x1400);
+  return originalDvarRegisterFloat(ArgList, var_value, var_min, var_max, 0x1400);
 }
 
 void registerdvars() {
 
-    cg_fovscale_ptr = originalDvarRegisterFloat((int)fovscale, (DWORD*)0x3F800000, 0x3F800000, 0x40a00000, 0x1001);
+    cg_fovscale_ptr = originalDvarRegisterFloat((int)"cg_fovscale", 1.f, 0.01f, 10.f, 0x1001);
 
     return originalRegisterDvars();
 }
 
 void setupFOVScale(void *athis) {
     if (cg_fovscale_ptr)
-        cg_fovscale = 0.75f * *(float*)(cg_fovscale_ptr + 8);
+        cg_fovscale = 0.75f * (cg_fovscale_ptr->current.value);
     else
         cg_fovscale = 0.75f;
         
@@ -117,15 +116,28 @@ void cleanupHook() {
     MH_Uninitialize();
 }
 
+#include <tchar.h>
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
-    case DLL_PROCESS_ATTACH:
+    case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hModule);
+        TCHAR moduleName[MAX_PATH] = { 0 };
+        if (GetModuleFileName(NULL, moduleName, MAX_PATH)) {
+            if (_tcsstr(moduleName, _T("CoD2SP_s")) == NULL) {
+                return FALSE;
+            }
+        }
+        else {
+            return FALSE;
+        }
         HMODULE moduleHandle;
         // idk why but this makes it not DETATCH prematurely
         GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCTSTR)DllMain, &moduleHandle);
+
         setupHook();
         break;
+    }
     case DLL_PROCESS_DETACH:
         cleanupHook();
         break;
